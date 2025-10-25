@@ -1,44 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
-
-
 
 const socket = io("https://letscode-2fyu.onrender.com");
 
 const userNames = ["Keshav", "Rishav", "Gaurav", "Shubham"];
 
 function App() {
-  const [question, setQuestion] = useState(
-    localStorage.getItem("question") || ""
+  const [question, setQuestion] = useState("");
+  const [codes, setCodes] = useState(() =>
+    userNames.reduce((acc, name) => ({ ...acc, [name]: "" }), {})
   );
-  const [codes, setCodes] = useState(() => {
-    const saved = JSON.parse(localStorage.getItem("codes"));
-    if (saved) return saved;
-    return userNames.reduce((acc, name) => ({ ...acc, [name]: "" }), {});
-  });
   const [fullscreen, setFullscreen] = useState(null);
 
+  const lastSentRef = useRef({}); // Track last emitted code for each user
+
+  // --- SOCKET EVENTS ---
   useEffect(() => {
     socket.on("init", ({ question: q, codes: c }) => {
       setQuestion(q);
       setCodes(c);
-      localStorage.setItem("question", q);
-      localStorage.setItem("codes", JSON.stringify(c));
     });
 
     socket.on("questionUpdated", (q) => {
       setQuestion(q);
-      localStorage.setItem("question", q);
     });
 
     socket.on("codeUpdated", ({ user, code }) => {
-      setCodes((prev) => {
-        const updated = { ...prev, [user]: code };
-        localStorage.setItem("codes", JSON.stringify(updated));
-        return updated;
-      });
+      // Avoid overwriting local user's code with echo from server
+      if (lastSentRef.current[user] === code) return;
+
+      setCodes((prev) => ({
+        ...prev,
+        [user]: code,
+      }));
     });
 
     return () => {
@@ -48,22 +44,20 @@ function App() {
     };
   }, []);
 
+  // --- HANDLERS ---
   const handleQuestionChange = (e) => {
     const q = e.target.value;
     setQuestion(q);
-    localStorage.setItem("question", q);
     socket.emit("updateQuestion", q);
   };
 
   const handleCodeChange = (user, value) => {
-    setCodes((prev) => {
-      const updated = { ...prev, [user]: value };
-      localStorage.setItem("codes", JSON.stringify(updated));
-      return updated;
-    });
+    setCodes((prev) => ({ ...prev, [user]: value }));
+    lastSentRef.current[user] = value; // Remember what we just sent
     socket.emit("submitCode", { user, code: value });
   };
 
+  // --- UI ---
   return (
     <div className="h-screen w-screen bg-gray-900 text-white flex flex-col p-4">
       {/* Question Section */}
@@ -78,7 +72,7 @@ function App() {
         />
       </div>
 
-      {/* 4 Code Editors */}
+      {/* Code Editors */}
       <div
         className={`flex-1 grid ${
           fullscreen ? "grid-cols-1 grid-rows-1" : "grid-rows-2 grid-cols-2"
