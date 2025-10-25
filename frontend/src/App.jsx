@@ -9,32 +9,23 @@ const userNames = ["Keshav", "Rishav", "Gaurav", "Shubham"];
 
 function App() {
   const [question, setQuestion] = useState("");
-  const [codes, setCodes] = useState(() =>
+  const [codes, setCodes] = useState(
     userNames.reduce((acc, name) => ({ ...acc, [name]: "" }), {})
   );
   const [fullscreen, setFullscreen] = useState(null);
+  const lastSentRef = useRef({});
 
-  const lastSentRef = useRef({}); // Track last emitted code for each user
-
-  // --- SOCKET EVENTS ---
   useEffect(() => {
     socket.on("init", ({ question: q, codes: c }) => {
       setQuestion(q);
       setCodes(c);
     });
 
-    socket.on("questionUpdated", (q) => {
-      setQuestion(q);
-    });
+    socket.on("questionUpdated", (q) => setQuestion(q));
 
     socket.on("codeUpdated", ({ user, code }) => {
-      // Avoid overwriting local user's code with echo from server
       if (lastSentRef.current[user] === code) return;
-
-      setCodes((prev) => ({
-        ...prev,
-        [user]: code,
-      }));
+      setCodes((prev) => ({ ...prev, [user]: code }));
     });
 
     return () => {
@@ -44,7 +35,6 @@ function App() {
     };
   }, []);
 
-  // --- HANDLERS ---
   const handleQuestionChange = (e) => {
     const q = e.target.value;
     setQuestion(q);
@@ -53,13 +43,15 @@ function App() {
 
   const handleCodeChange = (user, value) => {
     setCodes((prev) => ({ ...prev, [user]: value }));
-    lastSentRef.current[user] = value; // Remember what we just sent
+    lastSentRef.current[user] = value;
     socket.emit("submitCode", { user, code: value });
   };
 
-  // --- UI ---
+  // Each editor height in normal grid (half of remaining screen)
+  const editorHeight = "calc((100vh - 160px)/2)"; // adjust 160px for question box + padding
+
   return (
-    <div className="h-screen w-screen bg-gray-900 text-white flex flex-col p-4">
+    <div className="h-screen w-screen bg-gray-900 text-white flex flex-col p-4 overflow-hidden">
       {/* Question Section */}
       <div className="mb-4 flex flex-col">
         <label className="font-bold text-lg mb-2">Question:</label>
@@ -72,21 +64,19 @@ function App() {
         />
       </div>
 
-      {/* Code Editors */}
+      {/* 4 Code Editors */}
       <div
-        className={`flex-1 grid ${
-          fullscreen ? "grid-cols-1 grid-rows-1" : "grid-rows-2 grid-cols-2"
-        } gap-4`}
+        className={`grid ${fullscreen ? "grid-cols-1 grid-rows-1" : "grid-cols-2 grid-rows-2"} gap-4 flex-1`}
       >
         {userNames.map((user) => (
           <div
             key={user}
-            className={`flex flex-col bg-gray-800 rounded-xl overflow-hidden shadow-lg ${
-              fullscreen === user
-                ? "absolute top-0 left-0 w-screen h-screen z-50 p-4"
-                : ""
-            }`}
+            className={`flex flex-col bg-gray-800 rounded-xl shadow-lg relative`}
+            style={{
+              height: fullscreen ? "100vh" : editorHeight,
+            }}
           >
+            {/* Header */}
             <div className="bg-gray-700 p-2 flex justify-between items-center">
               <span className="font-semibold">{user}</span>
               <button
@@ -99,14 +89,17 @@ function App() {
               </button>
             </div>
 
-            <CodeMirror
-              value={codes[user]}
-              height="100%"
-              theme="dark"
-              extensions={[javascript()]}
-              onChange={(value) => handleCodeChange(user, value)}
-              className="flex-1 overflow-auto"
-            />
+            {/* Scrollable CodeMirror */}
+            <div className="flex-1 overflow-auto">
+              <CodeMirror
+                value={codes[user]}
+                height="100%"
+                theme="dark"
+                extensions={[javascript()]}
+                onChange={(value) => handleCodeChange(user, value)}
+                className="h-full overflow-auto text-sm"
+              />
+            </div>
           </div>
         ))}
       </div>
