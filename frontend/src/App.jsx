@@ -3,7 +3,10 @@ import { io } from "socket.io-client";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 
-const socket = io("http://localhost:3000");
+
+
+const socket = io("https://letscode-2fyu.onrender.com");
+
 const userNames = ["Keshav", "Rishav", "Gaurav", "Shubham"];
 
 function App() {
